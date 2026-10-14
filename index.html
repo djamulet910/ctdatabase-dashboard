@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>反恐情報儀表板 / Counter-Terrorism Intelligence Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg: #0b1220;
+  --bg2: #111a2e;
+  --panel: #152238;
+  --panel2: #1a2b44;
+  --border: #243552;
+  --text: #e8eef8;
+  --muted: #8fa3bf;
+  --accent: #3b82f6;
+  --accent2: #22d3ee;
+  --danger: #f43f5e;
+  --warn: #f59e0b;
+  --ok: #10b981;
+  --shadow: 0 8px 32px rgba(0,0,0,.35);
+  --radius: 14px;
+  --font: "Segoe UI", "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font-family: var(--font); }
+body {
+  min-height: 100vh;
+  background:
+    radial-gradient(1200px 600px at 10% -10%, rgba(59,130,246,.18), transparent 60%),
+    radial-gradient(900px 500px at 100% 0%, rgba(34,211,238,.10), transparent 55%),
+    var(--bg);
+}
+a { color: var(--accent2); }
+.wrap { max-width: 1400px; margin: 0 auto; padding: 24px 20px 48px; }
+
+.header {
+  display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between;
+  gap: 16px; margin-bottom: 16px;
+}
+.brand { display: flex; gap: 14px; align-items: center; }
+.badge {
+  width: 48px; height: 48px; border-radius: 12px;
+  background: linear-gradient(135deg, #1d4ed8, #0ea5e9);
+  display: grid; place-items: center; font-weight: 800; font-size: 14px;
+  box-shadow: 0 0 24px rgba(59,130,246,.4);
+}
+h1 { margin: 0; font-size: 1.45rem; letter-spacing: .02em; }
+.subtitle { color: var(--muted); font-size: .92rem; margin-top: 4px; }
+.meta {
+  color: var(--muted); font-size: .8rem; text-align: right;
+  background: rgba(21,34,56,.7); border: 1px solid var(--border);
+  padding: 10px 14px; border-radius: 10px;
+  display: flex; flex-direction: column; gap: 6px; align-items: flex-end;
+}
+.meta-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+.live-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: rgba(16,185,129,.15); color: var(--ok);
+  border: 1px solid rgba(16,185,129,.35);
+  padding: 2px 10px; border-radius: 999px; font-size: .72rem; font-weight: 700;
+}
+.live-pill .dot {
+  width: 7px; height: 7px; border-radius: 50%; background: var(--ok);
+  box-shadow: 0 0 8px var(--ok); animation: pulse 1.6s infinite;
+}
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+.btn-refresh, .btn-reset {
+  height: 38px; padding: 0 16px;
+  background: transparent; color: var(--text);
+  border: 1px solid var(--border); border-radius: 8px;
+  cursor: pointer; font-size: .88rem; white-space: nowrap;
+}
+.btn-refresh {
+  background: linear-gradient(135deg, rgba(59,130,246,.25), rgba(14,165,233,.2));
+  border-color: rgba(59,130,246,.5); color: var(--accent2); font-weight: 600;
+}
+.btn-refresh:hover, .btn-reset:hover { border-color: var(--accent); color: var(--accent2); }
+.btn-refresh:disabled { opacity: .55; cursor: wait; }
+
+.error-banner {
+  display: none; margin-bottom: 14px; padding: 12px 16px;
+  background: rgba(244,63,94,.12); border: 1px solid rgba(244,63,94,.4);
+  border-radius: 10px; color: #fecdd3; font-size: .9rem; line-height: 1.5;
+}
+.error-banner.show { display: block; }
+.error-banner strong { color: var(--danger); }
+.loading-banner {
+  display: none; margin-bottom: 14px; padding: 12px 16px;
+  background: rgba(59,130,246,.1); border: 1px solid rgba(59,130,246,.35);
+  border-radius: 10px; color: var(--muted); font-size: .9rem;
+}
+.loading-banner.show { display: block; }
+
+.filters {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr) auto;
+  gap: 10px; margin-bottom: 18px;
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 14px; box-shadow: var(--shadow);
+}
+.filter label {
+  display: block; font-size: .72rem; color: var(--muted);
+  margin-bottom: 5px; letter-spacing: .04em; text-transform: uppercase;
+}
+.filter select {
+  width: 100%; background: var(--bg2); color: var(--text);
+  border: 1px solid var(--border); border-radius: 8px;
+  padding: 9px 10px; font-size: .9rem; outline: none;
+}
+.filter select:focus { border-color: var(--accent); }
+
+.kpis {
+  display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; margin-bottom: 18px;
+}
+.kpi {
+  background: linear-gradient(180deg, var(--panel2), var(--panel));
+  border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 16px 14px; box-shadow: var(--shadow); position: relative; overflow: hidden;
+}
+.kpi::after {
+  content: ""; position: absolute; inset: auto -20% -40% 40%;
+  height: 80px; background: radial-gradient(circle, rgba(59,130,246,.15), transparent 70%);
+}
+.kpi .label { font-size: .75rem; color: var(--muted); margin-bottom: 8px; }
+.kpi .value { font-size: 1.65rem; font-weight: 700; letter-spacing: .01em; }
+.kpi .en { font-size: .72rem; color: var(--muted); margin-top: 4px; }
+.kpi.danger .value { color: var(--danger); }
+.kpi.warn .value { color: var(--warn); }
+.kpi.ok .value { color: var(--ok); }
+.kpi.accent .value { color: var(--accent2); }
+
+.charts {
+  display: grid; grid-template-columns: 1.4fr 1fr; gap: 14px; margin-bottom: 14px;
+}
+.charts-row2 {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 18px;
+}
+.card {
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 16px 16px 12px; box-shadow: var(--shadow);
+}
+.card h2 {
+  margin: 0 0 12px; font-size: .95rem; font-weight: 600;
+  display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
+}
+.card h2 span { color: var(--muted); font-weight: 400; font-size: .78rem; }
+.chart-box { position: relative; height: 280px; }
+.chart-box.sm { height: 300px; }
+
+.actors { list-style: none; margin: 0; padding: 0; max-height: 300px; overflow: auto; }
+.actors li {
+  display: grid; grid-template-columns: 36px 1fr auto; gap: 10px;
+  align-items: center; padding: 9px 6px; border-bottom: 1px solid rgba(36,53,82,.7);
+}
+.actors li:last-child { border-bottom: 0; }
+.actors .rank {
+  width: 28px; height: 28px; border-radius: 8px; background: var(--bg2);
+  display: grid; place-items: center; font-size: .75rem; color: var(--accent2); font-weight: 700;
+}
+.actors .name { font-size: .88rem; }
+.actors .stat { color: var(--muted); font-size: .78rem; text-align: right; white-space: nowrap; }
+
+.table-card { margin-bottom: 12px; }
+.table-head {
+  display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center;
+  gap: 10px; margin-bottom: 12px;
+}
+.search {
+  background: var(--bg2); border: 1px solid var(--border); color: var(--text);
+  border-radius: 8px; padding: 8px 12px; min-width: 220px; outline: none;
+}
+.table-wrap { overflow: auto; border-radius: 10px; border: 1px solid var(--border); }
+table { width: 100%; border-collapse: collapse; font-size: .86rem; }
+thead th {
+  position: sticky; top: 0; background: #1c2d48; color: var(--muted);
+  font-weight: 600; text-align: left; padding: 11px 12px;
+  border-bottom: 1px solid var(--border); cursor: pointer; user-select: none;
+  white-space: nowrap;
+}
+thead th:hover { color: var(--accent2); }
+tbody td { padding: 11px 12px; border-bottom: 1px solid rgba(36,53,82,.55); vertical-align: top; }
+tbody tr.main { cursor: pointer; transition: background .15s; }
+tbody tr.main:hover { background: rgba(59,130,246,.08); }
+tbody tr.main.active { background: rgba(59,130,246,.12); }
+tbody tr.detail td {
+  background: #0f1a2c; color: var(--muted); font-size: .84rem; line-height: 1.55;
+  padding: 0 12px;
+}
+tbody tr.detail .inner { padding: 12px 8px 16px; border-left: 3px solid var(--accent); margin: 0 4px 8px; }
+.fat-pill {
+  display: inline-block; min-width: 28px; text-align: center;
+  padding: 2px 8px; border-radius: 999px; font-weight: 700; font-size: .8rem;
+}
+.fat-0 { background: rgba(16,185,129,.15); color: var(--ok); }
+.fat-mid { background: rgba(245,158,11,.15); color: var(--warn); }
+.fat-hi { background: rgba(244,63,94,.18); color: var(--danger); }
+.empty { text-align: center; color: var(--muted); padding: 28px; }
+
+.footer {
+  margin-top: 18px; color: var(--muted); font-size: .75rem;
+  display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px;
+}
+
+@media (max-width: 1100px) {
+  .kpis { grid-template-columns: repeat(3, 1fr); }
+  .filters { grid-template-columns: repeat(3, 1fr); }
+  .charts, .charts-row2 { grid-template-columns: 1fr; }
+}
+@media (max-width: 640px) {
+  .kpis { grid-template-columns: repeat(2, 1fr); }
+  .filters { grid-template-columns: 1fr 1fr; }
+  .btn-reset { grid-column: 1 / -1; }
+  h1 { font-size: 1.15rem; }
+  .meta { text-align: left; align-items: flex-start; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="header">
+    <div class="brand">
+      <div class="badge">CT</div>
+      <div>
+        <h1>反恐情報儀表板</h1>
+        <div class="subtitle">Counter-Terrorism Intelligence Dashboard · 實體 / 網絡 / 網絡實體威脅態勢</div>
+      </div>
+    </div>
+    <div class="meta">
+      <div class="meta-row">
+        <span class="live-pill"><span class="dot"></span> LIVE · Google Sheets</span>
+        <button class="btn-refresh" id="btnRefresh" type="button">重新整理 Refresh</button>
+      </div>
+      <div>資料來源 · Sheet: <a href="https://docs.google.com/spreadsheets/d/153__y-0nLwSy5WaV0SA_S-t06oS3p-NdoKx6alJkDMs/" target="_blank" rel="noopener">ctdatabase</a></div>
+      <div id="lastRefreshed">上次更新 Last refreshed: —</div>
+      <div id="coverage">—</div>
+      <div id="rowCount">—</div>
+    </div>
+  </header>
+
+  <div class="loading-banner" id="loadingBanner">正在從 Google Sheets 擷取最新資料… Fetching live CSV…</div>
+  <div class="error-banner" id="errorBanner"></div>
+
+  <section class="filters" id="filters">
+    <div class="filter">
+      <label>Year / 年份</label>
+      <select id="fYear"><option value="">全部 All</option></select>
+    </div>
+    <div class="filter">
+      <label>Country / Region · 國家/地區</label>
+      <select id="fCountry"><option value="">全部 All</option></select>
+    </div>
+    <div class="filter">
+      <label>Attack Type · 攻擊類型</label>
+      <select id="fAttack"><option value="">全部 All</option></select>
+    </div>
+    <div class="filter">
+      <label>Severity · 嚴重程度</label>
+      <select id="fSeverity">
+        <option value="">全部 All</option>
+        <option value="zero">零傷亡</option>
+        <option value="some">有傷亡</option>
+        <option value="mass">重大傷亡 ≥10</option>
+      </select>
+    </div>
+    <div class="filter">
+      <label>Domain · 領域</label>
+      <select id="fDomain">
+        <option value="">全部 All</option>
+        <option value="實體">實體</option>
+        <option value="網絡">網絡</option>
+        <option value="網絡實體">網絡實體</option>
+      </select>
+    </div>
+    <div class="filter" style="display:flex;align-items:end">
+      <button class="btn-reset" id="btnReset" type="button">重置 Reset</button>
+    </div>
+  </section>
+
+  <section class="kpis">
+    <div class="kpi accent"><div class="label">事件總數</div><div class="value" id="kIncidents">0</div><div class="en">Incidents on record</div></div>
+    <div class="kpi danger"><div class="label">死亡總數</div><div class="value" id="kFatalities">0</div><div class="en">Total fatalities</div></div>
+    <div class="kpi"><div class="label">波及國家/地區</div><div class="value" id="kCountries">0</div><div class="en">Impacted countries</div></div>
+    <div class="kpi"><div class="label">涉案行為者</div><div class="value" id="kActors">0</div><div class="en">Identified actors</div></div>
+    <div class="kpi ok"><div class="label">零傷亡案件</div><div class="value" id="kZero">0</div><div class="en">Zero-fatality plots</div></div>
+    <div class="kpi warn"><div class="label">重大傷亡事件</div><div class="value" id="kMass">0</div><div class="en">≥10 fatalities</div></div>
+  </section>
+
+  <section class="charts">
+    <div class="card">
+      <h2>Yearly Trend <span>年度趨勢 · 事件數 / 死亡數</span></h2>
+      <div class="chart-box"><canvas id="chartYear"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>Attack Type <span>攻擊類型分佈</span></h2>
+      <div class="chart-box"><canvas id="chartAttack"></canvas></div>
+    </div>
+  </section>
+
+  <section class="charts-row2">
+    <div class="card">
+      <h2>Top 10 Countries <span>高風險國家/地區 · 事件 / 死亡</span></h2>
+      <div class="chart-box sm"><canvas id="chartCountry"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>Top Actors <span>活躍行為者</span></h2>
+      <ul class="actors" id="actorList"></ul>
+    </div>
+  </section>
+
+  <section class="card table-card">
+    <div class="table-head">
+      <h2 style="margin:0">事件記錄 / Incident Log <span id="logMeta"></span></h2>
+      <input class="search" id="fSearch" type="search" placeholder="搜尋摘要 / 行為者 / 城市…" />
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th data-sort="id">#</th>
+            <th data-sort="date">日期 Date ▼</th>
+            <th data-sort="country">國家/地區</th>
+            <th data-sort="city">城市</th>
+            <th data-sort="attackType">攻擊類型</th>
+            <th data-sort="actor">行為者</th>
+            <th data-sort="fatalities">死亡</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div>Live fetch from Google Sheets (gviz CSV) on every load · Chart.js CDN · Default Domain: 全部</div>
+    <div>KPI: incidents=count; fatalities=sum; countries=unique; actors=unique; zero=0; mass≥10 · Sheet must be “Anyone with the link can view”</div>
+  </footer>
+</div>
+
+<script>
+const SHEET_ID = '153__y-0nLwSy5WaV0SA_S-t06oS3p-NdoKx6alJkDMs';
+const CSV_URLS = [
+  `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv`,
+  `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv`
+];
+
+let DATA = [];
+const $ = (id) => document.getElementById(id);
+const charts = {};
+let sortKey = 'date';
+let sortDir = -1;
+let expanded = null;
+let bound = false;
+
+function num(n){ return Number(n||0).toLocaleString('en-US'); }
+
+function esc(s){
+  return String(s||'').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+/** Minimal RFC4180 CSV parser */
+function parseCSV(text) {
+  const rows = [];
+  let row = [], field = '', i = 0, inQ = false;
+  text = text.replace(/^\uFEFF/, '');
+  while (i < text.length) {
+    const c = text[i];
+    if (inQ) {
+      if (c === '"') {
+        if (text[i+1] === '"') { field += '"'; i += 2; continue; }
+        inQ = false; i++; continue;
+      }
+      field += c; i++; continue;
+    }
+    if (c === '"') { inQ = true; i++; continue; }
+    if (c === ',') { row.push(field); field = ''; i++; continue; }
+    if (c === '\r') { i++; continue; }
+    if (c === '\n') { row.push(field); rows.push(row); row = []; field = ''; i++; continue; }
+    field += c; i++;
+  }
+  if (field.length || row.length) { row.push(field); rows.push(row); }
+  return rows;
+}
+
+function colMap(header) {
+  const norm = (s) => String(s||'').trim().toLowerCase();
+  const idx = {};
+  header.forEach((h, i) => { idx[norm(h)] = i; });
+  const pick = (...names) => {
+    for (const n of names) if (idx[norm(n)] != null) return idx[norm(n)];
+    return -1;
+  };
+  return {
+    incident: pick('Incident', 'id', '#'),
+    date: pick('Incident Date', 'Date'),
+    country: pick('Country'),
+    city: pick('City'),
+    actor: pick('Actor'),
+    domain: pick('Domain'),
+    attackType: pick('Attack Type'),
+    fatalities: pick('Fatalities'),
+    summary: pick('Summary'),
+    source: pick('Source'),
+  };
+}
+
+function rowsToData(matrix) {
+  if (!matrix.length) return [];
+  const map = colMap(matrix[0]);
+  const out = [];
+  for (let r = 1; r < matrix.length; r++) {
+    const row = matrix[r];
+    if (!row || !row.some(c => String(c||'').trim())) continue;
+    const get = (k) => map[k] >= 0 ? String(row[map[k]] ?? '').trim() : '';
+    const date = get('date');
+    if (!date && !get('country') && !get('summary')) continue;
+    const fatRaw = get('fatalities').replace(/,/g, '');
+    const fatalities = Number.parseInt(fatRaw, 10);
+    const idRaw = get('incident');
+    const id = Number.parseInt(idRaw, 10) || r;
+    out.push({
+      id,
+      date,
+      year: (date.match(/^(\d{4})/) || [])[1] || '',
+      country: get('country'),
+      city: get('city'),
+      actor: get('actor'),
+      domain: get('domain'),
+      attackType: get('attackType'),
+      fatalities: Number.isFinite(fatalities) ? fatalities : 0,
+      summary: get('summary'),
+      source: get('source'),
+    });
+  }
+  return out;
+}
+
+async function fetchCSV() {
+  let lastErr = null;
+  for (const url of CSV_URLS) {
+    try {
+      const res = await fetch(url, { cache: 'no-store', mode: 'cors' });
+      if (!res.ok) throw new Error(`HTTP ${res.status} from ${url.split('?')[0]}`);
+      const text = await res.text();
+      if (!text || text.length < 20) throw new Error('Empty CSV response');
+      if (/<!DOCTYPE html|sign in|accounts\.google/i.test(text.slice(0, 500))) {
+        throw new Error('Sheet is not publicly readable (got HTML login page)');
+      }
+      const matrix = parseCSV(text);
+      const data = rowsToData(matrix);
+      if (!data.length) throw new Error('CSV parsed but no incident rows found');
+      return { data, url };
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw lastErr || new Error('All CSV endpoints failed');
+}
+
+function showError(msg) {
+  const el = $('errorBanner');
+  el.innerHTML = `<strong>資料載入失敗 / Fetch failed.</strong> ${esc(msg)}<br/>
+    請確認 Google Sheet 已設為「知道連結的使用者均可檢視 / Anyone with the link can view」。
+    Primary: gviz CSV · Fallback: export?format=csv`;
+  el.classList.add('show');
+}
+
+function clearError() {
+  $('errorBanner').classList.remove('show');
+  $('errorBanner').textContent = '';
+}
+
+function formatHK(d) {
+  try {
+    return d.toLocaleString('zh-HK', {
+      timeZone: 'Asia/Hong_Kong',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+    }) + ' HKT';
+  } catch (_) {
+    return d.toISOString();
+  }
+}
+
+function resetFilterOptions() {
+  const keepFirst = (sel) => {
+    const first = sel.options[0];
+    sel.innerHTML = '';
+    sel.appendChild(first);
+  };
+  keepFirst($('fYear'));
+  keepFirst($('fCountry'));
+  keepFirst($('fAttack'));
+}
+
+function populateFilters() {
+  resetFilterOptions();
+  const years = [...new Set(DATA.map(d => d.year).filter(Boolean))].sort().reverse();
+  const countries = [...new Set(DATA.map(d => d.country).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  const attacks = [...new Set(DATA.map(d => d.attackType).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  const yearSel = $('fYear'), countrySel = $('fCountry'), attackSel = $('fAttack');
+  years.forEach(y => yearSel.insertAdjacentHTML('beforeend', `<option value="${y}">${y}</option>`));
+  countries.forEach(c => countrySel.insertAdjacentHTML('beforeend', `<option value="${esc(c)}">${esc(c)}</option>`));
+  attacks.forEach(a => attackSel.insertAdjacentHTML('beforeend', `<option value="${esc(a)}">${esc(a)}</option>`));
+}
+
+function getFilters(){
+  return {
+    year: $('fYear').value,
+    country: $('fCountry').value,
+    attack: $('fAttack').value,
+    severity: $('fSeverity').value,
+    domain: $('fDomain').value,
+    search: ($('fSearch').value || '').trim().toLowerCase(),
+  };
+}
+
+function applyFilters(data){
+  const f = getFilters();
+  return data.filter(d => {
+    if (f.year && d.year !== f.year) return false;
+    if (f.country && d.country !== f.country) return false;
+    if (f.attack && d.attackType !== f.attack) return false;
+    if (f.domain && d.domain !== f.domain) return false;
+    if (f.severity === 'zero' && d.fatalities !== 0) return false;
+    if (f.severity === 'some' && d.fatalities <= 0) return false;
+    if (f.severity === 'mass' && d.fatalities < 10) return false;
+    if (f.search) {
+      const blob = `${d.summary} ${d.actor} ${d.city} ${d.country} ${d.attackType} ${d.source}`.toLowerCase();
+      if (!blob.includes(f.search)) return false;
+    }
+    return true;
+  });
+}
+
+function updateKPIs(rows){
+  $('kIncidents').textContent = num(rows.length);
+  $('kFatalities').textContent = num(rows.reduce((s,r)=>s+r.fatalities,0));
+  $('kCountries').textContent = num(new Set(rows.map(r=>r.country).filter(Boolean)).size);
+  $('kActors').textContent = num(new Set(rows.map(r=>r.actor).filter(Boolean)).size);
+  $('kZero').textContent = num(rows.filter(r=>r.fatalities===0).length);
+  $('kMass').textContent = num(rows.filter(r=>r.fatalities>=10).length);
+}
+
+function chartDefaults(){
+  Chart.defaults.color = '#8fa3bf';
+  Chart.defaults.borderColor = 'rgba(36,53,82,.8)';
+  Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
+}
+
+function upsertChart(key, cfg){
+  if (charts[key]) {
+    charts[key].data = cfg.data;
+    charts[key].options = cfg.options;
+    charts[key].update();
+    return;
+  }
+  charts[key] = new Chart($(cfg.canvas), cfg);
+}
+
+function updateCharts(rows){
+  const byYear = {};
+  rows.forEach(r => {
+    if (!r.year) return;
+    if (!byYear[r.year]) byYear[r.year] = {inc:0, fat:0};
+    byYear[r.year].inc++;
+    byYear[r.year].fat += r.fatalities;
+  });
+  const years = Object.keys(byYear).sort();
+  upsertChart('year', {
+    canvas: 'chartYear', type: 'bar',
+    data: {
+      labels: years,
+      datasets: [
+        { type:'bar', label:'Incidents 事件', data: years.map(y=>byYear[y].inc),
+          backgroundColor: 'rgba(59,130,246,.75)', borderRadius: 6, yAxisID:'y' },
+        { type:'line', label:'Fatalities 死亡', data: years.map(y=>byYear[y].fat),
+          borderColor: '#f43f5e', backgroundColor: 'rgba(244,63,94,.15)',
+          tension: .3, fill: true, yAxisID:'y1', pointRadius: 3 }
+      ]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      interaction:{ mode:'index', intersect:false },
+      scales: {
+        y: { beginAtZero:true, title:{display:true, text:'Incidents'}, grid:{color:'rgba(36,53,82,.6)'} },
+        y1: { beginAtZero:true, position:'right', title:{display:true, text:'Fatalities'}, grid:{drawOnChartArea:false} },
+        x: { grid:{display:false} }
+      },
+      plugins: { legend: { labels: { boxWidth:12 } } }
+    }
+  });
+
+  const at = {};
+  rows.forEach(r => { const k=r.attackType||'Unknown'; at[k]=(at[k]||0)+1; });
+  const atSorted = Object.entries(at).sort((a,b)=>b[1]-a[1]);
+  const top = atSorted.slice(0,10);
+  const other = atSorted.slice(10).reduce((s,[,v])=>s+v,0);
+  if (other) top.push(['Other 其他', other]);
+  const palette = ['#3b82f6','#22d3ee','#a78bfa','#f43f5e','#f59e0b','#10b981','#60a5fa','#fb7185','#34d399','#c084fc','#64748b'];
+  upsertChart('attack', {
+    canvas: 'chartAttack', type: 'doughnut',
+    data: {
+      labels: top.map(([k])=>k),
+      datasets: [{ data: top.map(([,v])=>v), backgroundColor: palette.slice(0, top.length), borderWidth:0 }]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false, cutout:'58%',
+      plugins: { legend: { position:'right', labels:{ boxWidth:10, font:{size:11} } } }
+    }
+  });
+
+  const cc = {};
+  rows.forEach(r => {
+    const k = r.country || 'Unknown';
+    if (!cc[k]) cc[k]={inc:0,fat:0};
+    cc[k].inc++; cc[k].fat += r.fatalities;
+  });
+  const topC = Object.entries(cc).sort((a,b)=> b[1].inc - a[1].inc || b[1].fat - a[1].fat).slice(0,10).reverse();
+  upsertChart('country', {
+    canvas: 'chartCountry', type: 'bar',
+    data: {
+      labels: topC.map(([k])=>k),
+      datasets: [
+        { label:'Events 事件', data: topC.map(([,v])=>v.inc), backgroundColor:'rgba(34,211,238,.75)', borderRadius:5 },
+        { label:'Deaths 死亡', data: topC.map(([,v])=>v.fat), backgroundColor:'rgba(244,63,94,.65)', borderRadius:5 }
+      ]
+    },
+    options: {
+      indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      scales: { x:{ beginAtZero:true, grid:{color:'rgba(36,53,82,.6)'} }, y:{ grid:{display:false} } },
+      plugins: { legend:{ labels:{ boxWidth:12 } } }
+    }
+  });
+
+  const ac = {};
+  rows.forEach(r => {
+    const k = r.actor || 'Unknown';
+    if (!ac[k]) ac[k]={inc:0,fat:0};
+    ac[k].inc++; ac[k].fat += r.fatalities;
+  });
+  const topA = Object.entries(ac).sort((a,b)=> b[1].inc - a[1].inc || b[1].fat - a[1].fat).slice(0,10);
+  $('actorList').innerHTML = topA.map(([name,v],i) => `
+    <li>
+      <div class="rank">${String(i+1).padStart(2,'0')}</div>
+      <div class="name">${esc(name)}</div>
+      <div class="stat">${v.inc} 件 · ${num(v.fat)} 死</div>
+    </li>`).join('') || '<li class="empty">No actors</li>';
+}
+
+function fatClass(f){
+  if (f >= 10) return 'fat-hi';
+  if (f > 0) return 'fat-mid';
+  return 'fat-0';
+}
+
+function sortRows(rows){
+  const k = sortKey;
+  return [...rows].sort((a,b) => {
+    let av=a[k], bv=b[k];
+    if (k==='fatalities' || k==='id') { av=+av; bv=+bv; return (av-bv)*sortDir; }
+    if (k==='date') return String(av).localeCompare(String(bv)) * sortDir;
+    return String(av||'').localeCompare(String(bv||''), 'en') * sortDir;
+  });
+}
+
+function renderTable(rows){
+  const sorted = sortRows(rows);
+  $('logMeta').textContent = `${sorted.length} 筆記錄 · 點擊列展開摘要`;
+  if (!sorted.length) {
+    $('tbody').innerHTML = '<tr><td class="empty" colspan="7">沒有符合條件的事件</td></tr>';
+    return;
+  }
+  $('tbody').innerHTML = sorted.map(r => {
+    const open = expanded === r.id;
+    return `
+      <tr class="main ${open?'active':''}" data-id="${r.id}">
+        <td>${r.id}</td>
+        <td>${esc(r.date)}</td>
+        <td>${esc(r.country)}</td>
+        <td>${esc(r.city)}</td>
+        <td>${esc(r.attackType)}</td>
+        <td>${esc(r.actor)}</td>
+        <td><span class="fat-pill ${fatClass(r.fatalities)}">${num(r.fatalities)}</span></td>
+      </tr>
+      <tr class="detail" style="display:${open?'table-row':'none'}" data-detail="${r.id}">
+        <td colspan="7"><div class="inner">
+          <div><strong>領域 Domain:</strong> ${esc(r.domain)}</div>
+          <div style="margin-top:6px"><strong>摘要 Summary:</strong> ${esc(r.summary)||'—'}</div>
+          <div style="margin-top:6px"><strong>來源 Source:</strong> ${r.source ? `<a href="${esc(r.source)}" target="_blank" rel="noopener noreferrer">${esc(r.source)}</a>` : '—'}</div>
+        </div></td>
+      </tr>`;
+  }).join('');
+}
+
+function refreshUI(){
+  const rows = applyFilters(DATA);
+  updateKPIs(rows);
+  updateCharts(rows);
+  renderTable(rows);
+}
+
+function initMeta(){
+  const dates = DATA.map(d=>d.date).filter(Boolean).sort();
+  $('coverage').textContent = dates.length ? `涵蓋 Coverage: ${dates[0]} → ${dates[dates.length-1]}` : '';
+  $('rowCount').textContent = `即時筆數 Live rows: ${DATA.length}`;
+}
+
+function bind(){
+  if (bound) return;
+  bound = true;
+  ['fYear','fCountry','fAttack','fSeverity','fDomain'].forEach(id => $(id).addEventListener('change', () => { expanded=null; refreshUI(); }));
+  $('fSearch').addEventListener('input', () => { expanded=null; refreshUI(); });
+  $('btnReset').addEventListener('click', () => {
+    $('fYear').value=''; $('fCountry').value=''; $('fAttack').value='';
+    $('fSeverity').value=''; $('fDomain').value=''; $('fSearch').value='';
+    sortKey='date'; sortDir=-1; expanded=null; refreshUI();
+  });
+  $('btnRefresh').addEventListener('click', () => loadLive());
+  document.querySelectorAll('thead th[data-sort]').forEach(th => {
+    th.addEventListener('click', () => {
+      const k = th.dataset.sort;
+      if (sortKey === k) sortDir *= -1; else { sortKey = k; sortDir = (k==='date' || k==='fatalities' || k==='id') ? -1 : 1; }
+      document.querySelectorAll('thead th').forEach(x => {
+        x.textContent = x.textContent.replace(/ [▲▼]$/, '');
+      });
+      th.textContent = th.textContent.replace(/ [▲▼]$/, '') + (sortDir>0?' ▲':' ▼');
+      refreshUI();
+    });
+  });
+  $('tbody').addEventListener('click', (e) => {
+    const tr = e.target.closest('tr.main');
+    if (!tr) return;
+    const id = +tr.dataset.id;
+    expanded = (expanded === id) ? null : id;
+    refreshUI();
+    const el = document.querySelector(`tr.main[data-id="${id}"]`);
+    if (el) el.scrollIntoView({block:'nearest'});
+  });
+}
+
+async function loadLive() {
+  const btn = $('btnRefresh');
+  btn.disabled = true;
+  $('loadingBanner').classList.add('show');
+  clearError();
+  try {
+    const { data } = await fetchCSV();
+    DATA = data;
+    populateFilters();
+    initMeta();
+    $('lastRefreshed').textContent = `上次更新 Last refreshed: ${formatHK(new Date())}`;
+    refreshUI();
+  } catch (e) {
+    showError(e && e.message ? e.message : String(e));
+    if (!DATA.length) {
+      updateKPIs([]);
+      $('actorList').innerHTML = '<li class="empty">無資料</li>';
+      $('tbody').innerHTML = '<tr><td class="empty" colspan="7">無法載入資料</td></tr>';
+    }
+  } finally {
+    $('loadingBanner').classList.remove('show');
+    btn.disabled = false;
+  }
+}
+
+chartDefaults();
+bind();
+loadLive();
+</script>
+</body>
+</html>
